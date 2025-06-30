@@ -1,0 +1,1 @@
+zit (Zig Information Tracker) is git clone, writen in Zig for educational purposes
