@@ -53,17 +53,40 @@ fn ingoteFile(alloc: std.mem.Allocator, path: []const u8) bool {
 
     return false;
 }
-pub fn iterateFiles(alloc: std.mem.Allocator) !void {
+pub fn cacheFile(file: fs.File) ZitFileCache {
+    _ = file;
+}
+pub fn checksumFile(alloc: std.mem.Allocator, file: fs.File) ?[32]u8 {
+    const end_pos = file.getEndPos() catch return null;
+    var text_buffer = alloc.alloc(u8, end_pos) catch return null;
+    defer alloc.free(text_buffer);
+    text_buffer[0] = 0;
+    var hash = std.crypto.hash.sha2.Sha256.init(.{});
+
+    _ = file.read(text_buffer) catch return null;
+    hash.update(text_buffer);
+
+    var final: [32]u8 = undefined;
+    hash.final(&final);
+
+    return final;
+}
+pub fn iterateFiles(alloc: std.mem.Allocator) !std.ArrayList(ZitFileCache) {
     var dir = try fs.cwd().openDir(".", .{ .iterate = true });
     defer dir.close();
 
     var dir_walker = try dir.walk(alloc);
     defer dir_walker.deinit();
 
+    var cache_list = std.ArrayList(ZitFileCache).init(alloc);
+    defer cache_list.deinit();
+
     while (try dir_walker.next()) |item| {
         if (ingoteFile(alloc, item.path)) continue;
+
         std.debug.print("{s} --- {s}\n", .{ if (item.kind == .file) "f" else "d", item.path });
     }
+    return cache_list;
 }
 pub fn createZitFileCache(filename: []const u8) !ZitFileCache {
     var file = try fs.cwd().openFile(filename, .{});
