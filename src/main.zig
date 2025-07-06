@@ -27,7 +27,7 @@ pub fn main() !void {
                 std.debug.print("Not enought arguments for `hash`!\n", .{});
                 continue;
             }
-            const cacheOrNull = zit.checksumFile(alloc, try std.fs.cwd().openFile(args[i + 1], .{}));
+            const cacheOrNull = zit.checksumFile(alloc, args[i + 1]);
             if (cacheOrNull) |cache| {
                 for (cache) |byte| {
                     std.debug.print("{x}", .{byte});
@@ -35,6 +35,15 @@ pub fn main() !void {
             } else {
                 std.debug.print("No cache for you today!\n", .{});
             }
+        } else if (std.mem.eql(u8, arg, "replace")) {
+            if (args.len < i + 2) {
+                std.debug.print("Not enought arguments for `hash`!\n", .{});
+                continue;
+            }
+            zit.replaceText(alloc, args[i + 1], "", "") catch |err| {
+                std.debug.print("OOHH NOO", .{});
+                return err;
+            };
         }
     }
 }
