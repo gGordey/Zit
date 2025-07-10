@@ -108,6 +108,36 @@ pub fn listFiles(alloc: std.mem.Allocator) !void {
     };
     try iterateFiles(alloc, listFileCallback, .{ .ignore_file = ignore_file, .alloc = alloc });
 }
+fn findCallback(entry: fs.Dir.Walker.Entry, args: anytype) !void {
+    if (entry.kind == .directory) return;
+
+    var entry_file = FileHandle.init(args.alloc, entry.path) catch |err| {
+        std.debug.print("! Error: {} in path {s}\n", .{ err, entry.path });
+        return;
+    };
+    defer entry_file.deinit();
+
+    var i: usize = 0;
+    var line: usize = 0;
+    var match_count: usize = 0;
+    while (i < entry_file.text.?.len) : (i += 1) {
+        if (entry_file.text.?[i] == '\n') line += 1;
+
+        if (entry_file.text.?[i] == args.find[match_count]) {
+            match_count += 1;
+        } else {
+            match_count = 0;
+        }
+
+        if (match_count == args.find.len) {
+            match_count = 0;
+            std.debug.print("\"{s}\" {} | {s}\n", .{ entry.path, line, args.find });
+        }
+    }
+}
+pub fn findText(alloc: std.mem.Allocator, find: []const u8) !void {
+    try iterateFiles(alloc, findCallback, .{ .find = find, .alloc = alloc });
+}
 fn replaceTextCallback(entry: fs.Dir.Walker.Entry, args: anytype) !void {
     if (entry.kind == .directory) return;
 
@@ -126,39 +156,30 @@ fn replaceTextCallback(entry: fs.Dir.Walker.Entry, args: anytype) !void {
     std.mem.copyForwards(u8, text_buf, read_handle.text.?);
     read_handle.deinit();
 
-    //var target_file = try FileHandle.initOverride(args.alloc, entry.path);
-    //defer target_file.deinit();
+    var target_file = try FileHandle.initOverride(args.alloc, entry.path);
+    defer target_file.deinit();
 
     var i: usize = 0;
-    var line: usize = 0;
     var match_count: usize = 0;
     while (i < text_len) : (i += 1) {
-        if (text_buf[i] == '\n') line += 1;
-
         if (text_buf[i] == args.find[match_count]) {
             match_count += 1;
         } else {
+            _ = try target_file.file.write(text_buf[i - match_count .. i + 1]); //save match_count is maximum i
             match_count = 0;
         }
 
-        if (match_count == args.find.len - 1) {
+        if (match_count == args.find.len) {
             match_count = 0;
-            std.debug.print("\"{s}\" {} | {s}\n", .{ entry.path, line, args.find });
+            std.debug.print("\"{s}\" `{s}` -> `{s}`\n", .{ entry.path, args.find, args.replace });
+            _ = try target_file.file.write(args.replace);
         }
     }
 }
-pub fn replaceText(alloc: std.mem.Allocator, path: []const u8, find: []const u8, replace: []const u8) !void {
-    try iterateFiles(alloc, replaceTextCallback, .{ .find = find, .repalce = replace, .alloc = alloc });
-    _ = .{ path, find, replace };
+pub fn replaceText(alloc: std.mem.Allocator, find: []const u8, replace: []const u8) !void {
+    try iterateFiles(alloc, replaceTextCallback, .{ .find = find, .replace = replace, .alloc = alloc });
 }
-
-pub fn findText(alloc: std.mem.Allocator, path: []const u8, target: []const u8) !void {
-    _ = .{ alloc, path, target };
-}
-pub fn cacheFile(file: fs.File) ZitFileCache {
-    _ = file;
-}
-pub fn checksumFile(alloc: std.mem.Allocator, path: []const u8) ?[32]u8 {
+pub fn hashFile(alloc: std.mem.Allocator, path: []const u8) ?[32]u8 {
     var file = FileHandle.init(alloc, path) catch return null;
     defer file.deinit();
 

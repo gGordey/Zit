@@ -1,7 +1,7 @@
 const std = @import("std");
 const zit = @import("zit.zig");
 
-const version = "0.0-dev";
+const version = "0.2-dev";
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{
@@ -27,8 +27,7 @@ pub fn main() !void {
                 std.debug.print("Not enought arguments for `hash`!\n", .{});
                 continue;
             }
-            const cacheOrNull = zit.checksumFile(alloc, args[i + 1]);
-            if (cacheOrNull) |cache| {
+            if (zit.hashFile(alloc, args[i + 1])) |cache| {
                 for (cache) |byte| {
                     std.debug.print("{x}", .{byte});
                 }
@@ -36,11 +35,20 @@ pub fn main() !void {
                 std.debug.print("No hash for you today!\n", .{});
             }
         } else if (std.mem.eql(u8, arg, "replace")) {
-            if (args.len < i + 2) {
-                std.debug.print("Not enought arguments for `hash`!\n", .{});
+            if (args.len < i + 3) {
+                std.debug.print("Not enought arguments for `replace`!\n", .{});
                 continue;
             }
-            zit.replaceText(alloc, ".", args[i + 1], "") catch |err| {
+            zit.replaceText(alloc, args[i + 1], args[i + 2]) catch |err| {
+                std.debug.print("OOHH NOO", .{});
+                return err;
+            };
+        } else if (std.mem.eql(u8, arg, "find")) {
+            if (args.len < i + 2) {
+                std.debug.print("Not enought arguments for `find`\n", .{});
+                continue;
+            }
+            zit.findText(alloc, args[i + 1]) catch |err| {
                 std.debug.print("OOHH NOO", .{});
                 return err;
             };
