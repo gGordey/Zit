@@ -18,10 +18,10 @@ pub fn main() !void {
     for (args, 0..) |arg, i| {
         if (std.mem.eql(u8, arg, "init")) {
             try zit.initialize();
-        } else if (std.mem.eql(u8, arg, "version")) {
+        } else if (std.mem.eql(u8, arg, "version") or std.mem.eql(u8, arg, "--version")) {
             std.debug.print("{s}", .{version});
         } else if (std.mem.eql(u8, arg, "ls")) {
-            _ = try zit.iterateFiles(alloc);
+            _ = try zit.listFiles(alloc);
         } else if (std.mem.eql(u8, arg, "hash")) {
             if (args.len < i + 2) {
                 std.debug.print("Not enought arguments for `hash`!\n", .{});
@@ -33,14 +33,14 @@ pub fn main() !void {
                     std.debug.print("{x}", .{byte});
                 }
             } else {
-                std.debug.print("No cache for you today!\n", .{});
+                std.debug.print("No hash for you today!\n", .{});
             }
         } else if (std.mem.eql(u8, arg, "replace")) {
             if (args.len < i + 2) {
                 std.debug.print("Not enought arguments for `hash`!\n", .{});
                 continue;
             }
-            zit.replaceText(alloc, args[i + 1], "", "") catch |err| {
+            zit.replaceText(alloc, ".", args[i + 1], "") catch |err| {
                 std.debug.print("OOHH NOO", .{});
                 return err;
             };

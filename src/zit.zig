@@ -86,29 +86,74 @@ fn ingoteFile(alloc: std.mem.Allocator, path: []const u8, zitignore_file: FileHa
 
     return false;
 }
-pub fn iterateFiles(alloc: std.mem.Allocator) !void {
+fn iterateFiles(alloc: std.mem.Allocator, callback: fn (entry: fs.Dir.Walker.Entry, args: anytype) anyerror!void, args: anytype) !void {
     var dir = try fs.cwd().openDir(".", .{ .iterate = true });
     defer dir.close();
 
     var dir_walker = try dir.walk(alloc);
     defer dir_walker.deinit();
 
-    var zitignore_file = try FileHandle.init(alloc, ".zitignore");
-    defer zitignore_file.deinit();
+    while (try dir_walker.next()) |item| try callback(item, args);
+}
+fn listFileCallback(entry: fs.Dir.Walker.Entry, args: anytype) !void {
+    if (args.ignore_file) |zitignore| {
+        if (ingoteFile(args.alloc, entry.path, zitignore)) return;
+    }
+    std.debug.print("{s} --- {s}\n", .{ if (entry.kind == .file) "f" else "d", entry.path });
+}
+pub fn listFiles(alloc: std.mem.Allocator) !void {
+    var ignore_file = FileHandle.init(alloc, ".zitignore") catch null;
+    defer if (ignore_file) |*zitignore| {
+        zitignore.deinit();
+    };
+    try iterateFiles(alloc, listFileCallback, .{ .ignore_file = ignore_file, .alloc = alloc });
+}
+fn replaceTextCallback(entry: fs.Dir.Walker.Entry, args: anytype) !void {
+    if (entry.kind == .directory) return;
 
-    while (try dir_walker.next()) |item| {
-        if (ingoteFile(alloc, item.path, zitignore_file)) continue;
+    var read_handle = FileHandle.init(args.alloc, entry.path) catch |err| {
+        std.debug.print("! Error: {} in path {s}\n", .{ err, entry.path });
+        return;
+    };
+    const text_len = read_handle.text.?.len;
 
-        std.debug.print("{s} --- {s}\n", .{ if (item.kind == .file) "f" else "d", item.path });
+    const text_buf = args.alloc.alloc(u8, text_len) catch |err| {
+        read_handle.deinit();
+        return err;
+    };
+    defer args.alloc.free(text_buf);
+
+    std.mem.copyForwards(u8, text_buf, read_handle.text.?);
+    read_handle.deinit();
+
+    //var target_file = try FileHandle.initOverride(args.alloc, entry.path);
+    //defer target_file.deinit();
+
+    var i: usize = 0;
+    var line: usize = 0;
+    var match_count: usize = 0;
+    while (i < text_len) : (i += 1) {
+        if (text_buf[i] == '\n') line += 1;
+
+        if (text_buf[i] == args.find[match_count]) {
+            match_count += 1;
+        } else {
+            match_count = 0;
+        }
+
+        if (match_count == args.find.len - 1) {
+            match_count = 0;
+            std.debug.print("\"{s}\" {} | {s}\n", .{ entry.path, line, args.find });
+        }
     }
 }
 pub fn replaceText(alloc: std.mem.Allocator, path: []const u8, find: []const u8, replace: []const u8) !void {
-    var file = try FileHandle.initOverride(alloc, path);
-    defer file.deinit();
+    try iterateFiles(alloc, replaceTextCallback, .{ .find = find, .repalce = replace, .alloc = alloc });
+    _ = .{ path, find, replace };
+}
 
-    _ = try file.file.write("HAHAHAHAHAH");
-
-    _ = .{ find, replace };
+pub fn findText(alloc: std.mem.Allocator, path: []const u8, target: []const u8) !void {
+    _ = .{ alloc, path, target };
 }
 pub fn cacheFile(file: fs.File) ZitFileCache {
     _ = file;
